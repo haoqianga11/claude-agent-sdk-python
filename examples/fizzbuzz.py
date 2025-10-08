@@ -2,39 +2,38 @@
 """FizzBuzz example for Claude Code SDK."""
 
 
-def fizzbuzz(n: int) -> str:
+def fizzbuzz_generator(limit: int):
     """
-    Classic FizzBuzz implementation.
+    Generator-based FizzBuzz implementation for memory efficiency.
 
-    Returns "Fizz" for multiples of 3, "Buzz" for multiples of 5,
+    Yields "Fizz" for multiples of 3, "Buzz" for multiples of 5,
     "FizzBuzz" for multiples of both 3 and 5, and the number as a string otherwise.
 
     Args:
-        n: The number to check
+        limit: The upper limit of the sequence (inclusive)
 
-    Returns:
-        str: The FizzBuzz result for the number
+    Yields:
+        str: The FizzBuzz result for each number from 1 to limit
     """
-    if n % 15 == 0:
-        return "FizzBuzz"
-    elif n % 3 == 0:
-        return "Fizz"
-    elif n % 5 == 0:
-        return "Buzz"
-    else:
-        return str(n)
+    for i in range(1, limit + 1):
+        output = ""
+        if i % 3 == 0:
+            output += "Fizz"
+        if i % 5 == 0:
+            output += "Buzz"
+        yield output or str(i)
 
 
 def print_fizzbuzz(limit: int = 100) -> None:
     """
-    Print FizzBuzz sequence from 1 to limit.
+    Print FizzBuzz sequence from 1 to limit using generator.
 
     Args:
         limit: The upper limit of the sequence (inclusive)
     """
-    print(f"=== FizzBuzz (1 to {limit}) ===")
-    for i in range(1, limit + 1):
-        print(fizzbuzz(i))
+    print(f"=== FizzBuzz Generator (1 to {limit}) ===")
+    for result in fizzbuzz_generator(limit):
+        print(result)
 
 
 if __name__ == "__main__":
