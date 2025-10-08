@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.1.1
+
+### New Features
+
+- **Custom transport support**: `ClaudeSDKClient` now supports custom transport implementations, enabling advanced use cases like custom CLI wrappers or alternative communication protocols (#187)
+
+### Improvements
+
+- Add minimum Claude Code version check (2.0.0+) to ensure compatibility (#206)
+- Update model references to `claude-sonnet-4-5` (#198)
+- Update `PermissionResult` to match latest control protocol (#209)
+
 ## 0.1.0
 
 Introducing the Claude Agent SDK! The Claude Code SDK has been renamed to better reflect its capabilities for building AI agents across all domains, not just coding.
