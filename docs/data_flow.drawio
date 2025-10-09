@@ -1,0 +1,82 @@
+<mxfile host="app.diagrams.net" modified="2024-09-04T00:00:00.000Z" agent="7.0" version="22.1.4">
+  <diagram id="data-flow" name="Data Flow">
+    <mxGraphModel dx="1886" dy="1080" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="850" pageHeight="1100" math="0" shadow="0">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+        <mxCell id="node-user" value="User Application / Scripts" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="40" y="180" width="200" height="80" as="geometry"/>
+        </mxCell>
+        <mxCell id="node-query" value="query()&#xa;(one-shot async iterator)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#6c8ebf" vertex="1" parent="1">
+          <mxGeometry x="280" y="110" width="220" height="80" as="geometry"/>
+        </mxCell>
+        <mxCell id="node-client" value="ClaudeSDKClient&#xa;(streaming bidirectional)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#6c8ebf" vertex="1" parent="1">
+          <mxGeometry x="280" y="250" width="220" height="80" as="geometry"/>
+        </mxCell>
+        <mxCell id="node-internal" value="Internal Query Engine&#xa;- InternalClient&#xa;- Query (control protocol)&#xa;- message_parser" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450" vertex="1" parent="1">
+          <mxGeometry x="540" y="180" width="260" height="120" as="geometry"/>
+        </mxCell>
+        <mxCell id="node-transport" value="Transport Abstraction&#xa;(claude_agent_sdk.Transport)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00" vertex="1" parent="1">
+          <mxGeometry x="840" y="190" width="240" height="80" as="geometry"/>
+        </mxCell>
+        <mxCell id="node-subprocess" value="SubprocessCLITransport&#xa;(default CLI bridge)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656" vertex="1" parent="1">
+          <mxGeometry x="1120" y="190" width="240" height="80" as="geometry"/>
+        </mxCell>
+        <mxCell id="node-cli" value="Claude CLI Process&#xa;(claude --output-format stream-json)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366" vertex="1" parent="1">
+          <mxGeometry x="1400" y="190" width="260" height="80" as="geometry"/>
+        </mxCell>
+        <mxCell id="node-service" value="Claude Code Service&#xa;(tool execution, responses)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6" vertex="1" parent="1">
+          <mxGeometry x="1700" y="190" width="260" height="80" as="geometry"/>
+        </mxCell>
+        <mxCell id="node-options" value="ClaudeAgentOptions &amp; configuration" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#6c8ebf;dashed=1" vertex="1" parent="1">
+          <mxGeometry x="300" y="20" width="220" height="70" as="geometry"/>
+        </mxCell>
+        <mxCell id="node-hooks" value="Hooks &amp; tool permission callbacks&#xa;(hooks, can_use_tool)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#b85450;dashed=1" vertex="1" parent="1">
+          <mxGeometry x="560" y="340" width="260" height="80" as="geometry"/>
+        </mxCell>
+        <mxCell id="node-mcp" value="SDK MCP servers&#xa;(create_sdk_mcp_server)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#9673a6;dashed=1" vertex="1" parent="1">
+          <mxGeometry x="580" y="40" width="220" height="70" as="geometry"/>
+        </mxCell>
+        <mxCell id="edge-user-query" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeWidth=2;startArrow=block;endArrow=block;strokeColor=#6c8ebf" parent="1" source="node-user" target="node-query" edge="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="edge-user-client" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeWidth=2;startArrow=block;endArrow=block;strokeColor=#6c8ebf" parent="1" source="node-user" target="node-client" edge="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="edge-query-internal" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeWidth=2;startArrow=block;endArrow=block;strokeColor=#b85450" parent="1" source="node-query" target="node-internal" edge="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="edge-client-internal" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeWidth=2;startArrow=block;endArrow=block;strokeColor=#b85450" parent="1" source="node-client" target="node-internal" edge="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="edge-internal-transport" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeWidth=2;startArrow=block;endArrow=block;strokeColor=#d79b00" parent="1" source="node-internal" target="node-transport" edge="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="edge-transport-subprocess" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeWidth=2;startArrow=block;endArrow=block;strokeColor=#d6b656" parent="1" source="node-transport" target="node-subprocess" edge="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="edge-subprocess-cli" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeWidth=2;startArrow=block;endArrow=block;strokeColor=#82b366" parent="1" source="node-subprocess" target="node-cli" edge="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="edge-cli-service" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeWidth=2;startArrow=block;endArrow=block;strokeColor=#9673a6" parent="1" source="node-cli" target="node-service" edge="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="edge-options-query" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeWidth=1;dashed=1;endArrow=block;strokeColor=#6c8ebf" parent="1" source="node-options" target="node-query" edge="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="edge-options-client" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeWidth=1;dashed=1;endArrow=block;strokeColor=#6c8ebf" parent="1" source="node-options" target="node-client" edge="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="edge-options-subprocess" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeWidth=1;dashed=1;endArrow=block;strokeColor=#6c8ebf" parent="1" source="node-options" target="node-subprocess" edge="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="edge-hooks-internal" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeWidth=1;dashed=1;endArrow=block;strokeColor=#b85450" parent="1" source="node-hooks" target="node-internal" edge="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="edge-mcp-internal" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeWidth=1;dashed=1;endArrow=block;strokeColor=#9673a6" parent="1" source="node-mcp" target="node-internal" edge="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
