@@ -1,5 +1,236 @@
 # Claude Agent SDK - 技术细节说明
+``` mermaid
+flowchart LR
+    %% 横版结构，左→右
+    subgraph L0[Developer App / Product]
+      A[UI / 业务服务<br/>- 任务定义与触发<br/>- 会话/用户态]
+    end
 
+    subgraph L1[Claude Agent SDK（Python）]
+      B[Agent Orchestrator<br/>- 对话状态/记忆抽象<br/>- 工具/Hook 注册<br/>- 流式/重试/超时]
+      B2[Policy Adapter<br/>- 权限/能力声明<br/>- 可观测性接入]
+    end
+
+    subgraph L2[Claude Code Runtime（Agent Harness）]
+      C1[Tool Registry<br/>- 内置/自定义工具<br/>- MCP 客户端]
+      C2[Context Manager<br/>- 提示模板/剪裁/缓存<br/>- 长上下文/检索]
+      C3[Decision Loop<br/>- 何时思考/调用工具/继续对话]
+      C4[Sandbox Executor<br/>- 代码执行/文件系统隔离<br/>- 资源&网络策略]
+      C5[Governance & Logging<br/>- 审计/追踪/回放<br/>- 速率/并发控制]
+    end
+
+    subgraph L3[Anthropic API（模型层）]
+      D1[Claude Models<br/>- 推理/代码能力]
+      D2[Prompt Caching & Perf<br/>- 上下文复用/成本优化]
+    end
+
+    subgraph L4[External Systems / Tools]
+      E1[(DB / APIs / SaaS)]
+      E2[(FS / VectorDB)]
+      E3[(私有服务)]
+    end
+
+    A -->|任务/消息| B
+    B --> B2
+    B -->|抽象调用| C3
+    C3 -->|需要工具?| C1
+    C1 -->|MCP/工具调用| E1
+    C1 -->|检索/向量| E2
+    C1 -->|企业内网| E3
+    C3 -->|需要执行?| C4
+    C3 -->|需要模型推理?| C2
+    C2 -->|构造请求| D1
+    D1 -->|流式输出/令牌| C2
+    C2 -->|提示缓存| D2
+    C3 -->|记忆/轨迹| C5
+    B -->|标准化结果| A
+```
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant U as 用户/上层业务
+    participant APP as Developer App
+    participant SDK as Claude Agent SDK
+    participant CC as Claude Code Runtime
+    participant TOOLS as 工具/MCP服务
+    participant SBX as Sandbox Executor
+    participant API as Anthropic API（Claude）
+
+    U->>APP: 发起任务/对话请求（意图、上下文、约束）
+    APP->>SDK: 调用 SDK.query()/run()（携带会话态与策略）
+    SDK->>CC: 标准化请求（工具清单、Hook、权限/限额）
+    Note over CC: 建立决策循环（Decide → Act/Tool → Reflect → Think）
+
+    CC->>CC: 读取记忆与上下文（剪裁/合并/缓存命中）
+    CC->>API: 首次思考/规划（system+messages，可能思考链）
+    API-->>CC: 规划/思考结果（流式 tokens）
+
+    alt 需要工具
+        CC->>TOOLS: 通过 MCP/工具协议发起调用（带入安全参数）
+        TOOLS-->>CC: 工具结果（结构化数据/文件句柄）
+        CC->>SBX: （可选）在沙箱中执行代码/验证/转换
+        SBX-->>CC: 执行结果/工件（logs/artifacts）
+        CC->>API: 将工具/执行结果注入为上下文继续推理
+        API-->>CC: 生成中间/最终回复（流式）
+    else 不需要工具
+        CC->>API: 直接继续对话推理（含回退/重试策略）
+        API-->>CC: 生成中间/最终回复（流式）
+    end
+
+    CC->>CC: 更新会话记忆/轨迹（审计/回放/度量）
+    CC-->>SDK: 标准化响应（含 tokens/工具轨迹/可观测数据）
+    SDK-->>APP: 回传响应（支持流式/事件/中间态）
+    APP-->>U: 呈现最终结果（可附带可视化/下载/继续迭代）
+
+    Note over CC,API: 失败路径：超时/速率/工具错误 → 策略化重试/降级/回滚
+```
+## v.s Claude Code
+### 总揽（分层与边界）
+``` mermaid
+flowchart LR
+  subgraph L0[上层产品 / 服务]
+    UI[应用UI/任务编排] -->|任务/意图| SDK[Agent SDK / 业务适配层]
+  end
+
+  subgraph L1[Claude Code Runtime（Agent Harness）]
+    ORCH["Orchestrator<br/>决策循环 / 流程控制"]
+    CTX["Context Manager<br/>会话 / 检索 / 提示剪裁 / 缓存"]
+    POLICY["Policy Engine<br/>权限 / 限额 / 重试 / 降级"]
+    TOOLS["Tool Registry (MCP)<br/>工具声明 / 发现 / 调用"]
+    SBX["Sandbox Executor<br/>安全执行 / 资源配额"]
+    MEM["Memory Store<br/>短期 / 长期记忆，轨迹"]
+    GOV["Governance & Telemetry<br/>审计 / 日志 / 回放 / 度量"]
+  end
+
+  subgraph L2[模型与外部系统]
+    API["Anthropic API<br/>Claude Models / Prompt Caching"]
+    EXT[(External Systems / DB / SaaS)]
+    VDB[(VectorDB / 索引)]
+    FS[(对象 / 文件存储)]
+  end
+
+  SDK --> ORCH
+  ORCH --> CTX
+  ORCH --> POLICY
+  ORCH --> TOOLS
+  ORCH --> SBX
+  ORCH --> MEM
+  ORCH --> GOV
+
+  CTX -->|构造请求| API
+  API -->|流式tokens| CTX
+
+  TOOLS -->|MCP调用| EXT
+  TOOLS -->|检索| VDB
+
+  SBX -->|产物/日志| FS
+  GOV -->|观测/回放| FS
+
+  ORCH -->|标准化响应| SDK
+```
+
+### 生命周期与状态机
+``` mermaid
+stateDiagram-v2
+  [*] --> READY
+  READY --> THINKING: 构造Prompt & 调模型
+  THINKING --> DECIDING: 解析思考/规划
+  DECIDING --> ACT_TOOL: 需要外部工具?
+  DECIDING --> ACT_EXEC: 需要沙箱执行?
+  DECIDING --> RESPOND: 可直接答复?
+  ACT_TOOL --> OBSERVE: 收集工具结果
+  ACT_EXEC --> OBSERVE: 收集执行结果/产物
+  OBSERVE --> REFLECT: 汇总证据/校验
+  REFLECT --> READY: 继续循环?
+  REFLECT --> RESPOND: 终止并答复
+  RESPOND --> [*]
+
+  state READY {
+    [*] --> SETUP
+    SETUP --> PROMPT_CRAFT
+    PROMPT_CRAFT --> [*]
+  }
+```
+### 数据契约
+请求
+``` json
+{
+  "session_id": "string",
+  "actor": "user|system|cron",
+  "goal": "string",
+  "inputs": { "k": "v" },
+  "constraints": {
+    "tools": ["db.search", "http.fetch"],
+    "max_steps": 12,
+    "hard_timeout_ms": 45000,
+    "budget_tokens": 200000
+  },
+  "policy_overrides": { "allow_network": true, "allow_fs": false }
+}
+```
+
+工具
+``` json
+{
+  "name": "db.search",
+  "version": "1.2.0",
+  "schema": {
+    "type": "object",
+    "properties": {
+      "query": { "type": "string" },
+      "top_k": { "type": "integer", "minimum": 1, "maximum": 100 }
+    },
+    "required": ["query"]
+  },
+  "auth": "inherited|api_key|oauth2",
+  "limits": { "rps": 5, "concurrency": 2 },
+  "side_effects": false
+}
+```
+
+观测
+``` json
+{
+  "tool": "db.search",
+  "args": { "query": "error budget dashboard", "top_k": 5 },
+  "observation": {
+    "ok": true,
+    "data": [{ "title": "SRE guide", "url": "..." }],
+    "latency_ms": 132,
+    "cost": { "calls": 1 }
+  }
+}
+```
+
+沙箱
+``` json
+{
+  "exec_id": "uuid",
+  "policy": { "cpu_ms": 5000, "mem_mb": 256, "net": "deny" },
+  "stdout": "string",
+  "stderr": "string",
+  "exit_code": 0,
+  "artifacts": [
+    { "path": "reports/summary.md", "sha256": "..." }
+  ],
+  "logs_ref": "s3://.../exec_id.log"
+}
+```
+
+轨迹
+``` json
+{
+  "ts": "2025-10-11T13:45:12Z",
+  "session_id": "string",
+  "step": 5,
+  "event": "tool.invoke|model.call|exec.run|respond",
+  "payload": {},
+  "usage": { "input_tokens": 1234, "output_tokens": 876 },
+  "policy": { "allow_network": false },
+  "span_id": "trace-span-id"
+}
+```
 ## 数据流详解
 
 ### 完整数据流向
