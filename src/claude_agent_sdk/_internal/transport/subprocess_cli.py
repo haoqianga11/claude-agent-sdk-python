@@ -3,9 +3,11 @@
 import json
 import logging
 import os
+import platform
 import re
 import shutil
 import sys
+import tempfile
 from collections.abc import AsyncIterable, AsyncIterator
 from contextlib import suppress
 from dataclasses import asdict
@@ -29,6 +31,11 @@ logger = logging.getLogger(__name__)
 _DEFAULT_MAX_BUFFER_SIZE = 1024 * 1024  # 1MB buffer limit
 MINIMUM_CLAUDE_CODE_VERSION = "2.0.0"
 
+# Platform-specific command line length limits
+# Windows cmd.exe has a limit of 8191 characters, use 8000 for safety
+# Other platforms have much higher limits
+_CMD_LENGTH_LIMIT = 8000 if platform.system() == "Windows" else 100000
+
 
 class SubprocessCLITransport(Transport):
     """Subprocess transport using Claude Code CLI."""
@@ -37,12 +44,13 @@ class SubprocessCLITransport(Transport):
         self,
         prompt: str | AsyncIterable[dict[str, Any]],
         options: ClaudeAgentOptions,
-        cli_path: str | Path | None = None,
     ):
         self._prompt = prompt
         self._is_streaming = not isinstance(prompt, str)
         self._options = options
-        self._cli_path = str(cli_path) if cli_path else self._find_cli()
+        self._cli_path = (
+            str(options.cli_path) if options.cli_path is not None else self._find_cli()
+        )
         self._cwd = str(options.cwd) if options.cwd else None
         self._process: Process | None = None
         self._stdout_stream: TextReceiveStream | None = None
@@ -56,6 +64,7 @@ class SubprocessCLITransport(Transport):
             if options.max_buffer_size is not None
             else _DEFAULT_MAX_BUFFER_SIZE
         )
+        self._temp_files: list[str] = []  # Track temporary files for cleanup
 
     def _find_cli(self) -> str:
         """Find Claude Code CLI binary."""
@@ -79,8 +88,8 @@ class SubprocessCLITransport(Transport):
             "  npm install -g @anthropic-ai/claude-code\n"
             "\nIf already installed locally, try:\n"
             '  export PATH="$HOME/node_modules/.bin:$PATH"\n'
-            "\nOr specify the path when creating transport:\n"
-            "  SubprocessCLITransport(..., cli_path='/path/to/claude')"
+            "\nOr provide the path via ClaudeAgentOptions:\n"
+            "  ClaudeAgentOptions(cli_path='/path/to/claude')"
         )
 
     def _build_command(self) -> list[str]:
@@ -172,7 +181,8 @@ class SubprocessCLITransport(Transport):
                 name: {k: v for k, v in asdict(agent_def).items() if v is not None}
                 for name, agent_def in self._options.agents.items()
             }
-            cmd.extend(["--agents", json.dumps(agents_dict)])
+            agents_json = json.dumps(agents_dict)
+            cmd.extend(["--agents", agents_json])
 
         sources_value = (
             ",".join(self._options.setting_sources)
@@ -180,6 +190,14 @@ class SubprocessCLITransport(Transport):
             else ""
         )
         cmd.extend(["--setting-sources", sources_value])
+
+        # Add plugin directories
+        if self._options.plugins:
+            for plugin in self._options.plugins:
+                if plugin["type"] == "local":
+                    cmd.extend(["--plugin-dir", plugin["path"]])
+                else:
+                    raise ValueError(f"Unsupported plugin type: {plugin['type']}")
 
         # Add extra args for future CLI flags
         for flag, value in self._options.extra_args.items():
@@ -198,6 +216,37 @@ class SubprocessCLITransport(Transport):
             # String mode: use --print with the prompt
             cmd.extend(["--print", "--", str(self._prompt)])
 
+        # Check if command line is too long (Windows limitation)
+        cmd_str = " ".join(cmd)
+        if len(cmd_str) > _CMD_LENGTH_LIMIT and self._options.agents:
+            # Command is too long - use temp file for agents
+            # Find the --agents argument and replace its value with @filepath
+            try:
+                agents_idx = cmd.index("--agents")
+                agents_json_value = cmd[agents_idx + 1]
+
+                # Create a temporary file
+                # ruff: noqa: SIM115
+                temp_file = tempfile.NamedTemporaryFile(
+                    mode="w", suffix=".json", delete=False, encoding="utf-8"
+                )
+                temp_file.write(agents_json_value)
+                temp_file.close()
+
+                # Track for cleanup
+                self._temp_files.append(temp_file.name)
+
+                # Replace agents JSON with @filepath reference
+                cmd[agents_idx + 1] = f"@{temp_file.name}"
+
+                logger.info(
+                    f"Command line length ({len(cmd_str)}) exceeds limit ({_CMD_LENGTH_LIMIT}). "
+                    f"Using temp file for --agents: {temp_file.name}"
+                )
+            except (ValueError, IndexError) as e:
+                # This shouldn't happen, but log it just in case
+                logger.warning(f"Failed to optimize command line length: {e}")
+
         return cmd
 
     async def connect(self) -> None:
@@ -205,7 +254,8 @@ class SubprocessCLITransport(Transport):
         if self._process:
             return
 
-        await self._check_claude_version()
+        if not os.environ.get("CLAUDE_AGENT_SDK_SKIP_VERSION_CHECK"):
+            await self._check_claude_version()
 
         cmd = self._build_command()
         try:
@@ -306,6 +356,12 @@ class SubprocessCLITransport(Transport):
     async def close(self) -> None:
         """Close the transport and clean up resources."""
         self._ready = False
+
+        # Clean up temporary files first (before early return)
+        for temp_file in self._temp_files:
+            with suppress(Exception):
+                Path(temp_file).unlink(missing_ok=True)
+        self._temp_files.clear()
 
         if not self._process:
             return
